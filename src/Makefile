@@ -17,28 +17,22 @@ endif
 
 
 # Core objects
-CORE_OBJS = evaluation.o move_generation.o move.o piece.o position.o search.o timer.o tt.o uci.o utils.o 
+CORE_OBJS = evaluation.o move_generation.o move.o perft.o piece.o position.o search.o timer.o tt.o uci.o utils.o
 
 # Phony targets
 .PHONY: all debug release clean bench
 
 # Default build
-all: perft perft_divide mozzarella bench
+all: mozzarella bench
 
 
-# Main executables
-perft: perft.o ${CORE_OBJS}
-	$(CXX) ${CXXFLAGS} $^ -o $@
-
-perft_divide: perft_divide.o ${CORE_OBJS} 
-	$(CXX) ${CXXFLAGS} $^ -o $@
-
+# Main executable
 mozzarella: mozzarella.o utils.o ${CORE_OBJS}
 	$(CXX) ${CXXFLAGS} $^ -o $@
 
 
 # Benchmarking targets
-bench: ../tests/movegen_bench ../tests/search_bench
+bench: ../tests/movegen_bench ../tests/search_bench ../tests/perft
 
 ../tests/%: ../tests/%.o ${CORE_OBJS}
 	$(CXX) ${CXXFLAGS} $^ -o $@
@@ -46,7 +40,9 @@ bench: ../tests/movegen_bench ../tests/search_bench
 ../tests/%.o: ../tests/%.cpp
 	$(CXX) ${CXXFLAGS} -I.. -c $< -o $@
 
-%.o: %.cpp castling_rights.h evaluation.h move_generation.h move.h piece.h player.h position.h search.h timer.h tt.h uci.h utils.h 
+
+# Object rule
+%.o: %.cpp castling_rights.h evaluation.h move_generation.h move.h perft.h piece.h player.h position.h search.h timer.h tt.h uci.h utils.h
 	$(CXX) ${CXXFLAGS} -c $<
 
 
@@ -60,4 +56,4 @@ release:
 
 # Cleanup
 clean:
-	rm -f *.o perft perft_divide mozzarella ../tests/movegen_bench ../tests/search_bench
+	rm -f *.o mozzarella ../tests/movegen_bench ../tests/search_bench ../tests/perft

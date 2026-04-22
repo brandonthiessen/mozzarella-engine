@@ -1,6 +1,9 @@
+#include "move_generation.h"
+#include "perft.h"
 #include "utils.h"
 #include "search.h"
 #include "uci.h"
+#include <vector>
 
 
 void uci_loop() {
@@ -42,14 +45,40 @@ void uci_loop() {
             std::string token;
             iss >> token; // read "go"
 
+            // Perft mode options via "go perft N"
+            bool perft_mode = false;
+            int perft_depth = -1;
+
             // Read in all values from "go" command
             while (iss >> token) {
+                if (token == "perft") {
+                    perft_mode = true;
+                    iss >> perft_depth;
+                }
                 if (token == "wtime") iss >> wtime;
                 else if (token == "btime") iss >> btime;
                 else if (token == "winc") iss >> winc;
                 else if (token == "binc") iss >> binc;
                 else if (token == "movetime") iss >> movetime;
                 else if (token == "depth") iss >> depth;
+            }
+
+            if (perft_mode) {
+                std::vector<uint32_t> moves = generate_legal_moves(&pos);
+
+                long total_nodes = 0;
+
+                for (uint32_t m: moves) {
+                    pos.move(m);
+                    long nodes = perft(&pos, perft_depth - 1);
+                    total_nodes += nodes;
+                    pos.unmove(m);
+
+                    std::cout << move_to_string(m) << ": " << nodes << std::endl;
+                }
+
+                std::cout << "\nNodes searched: " << total_nodes << std::endl;
+                continue;
             }
 
             int remaining = (pos.player_to_move == Player::WHITE) ? wtime : btime;

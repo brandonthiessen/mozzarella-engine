@@ -42,7 +42,7 @@ To build Mozzarella, you need the following tools installed on your system:
 
 5. Build the executable by running:
 
-   `$ make mozzarella`
+   `$ make`
 
 
 ## Usage

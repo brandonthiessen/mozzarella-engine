@@ -1,6 +1,8 @@
 #include "search.h"
+#include "move.h"
+#include <cstdint>
 
-int _mvv_lva[6][6] = {
+constexpr int _mvv_lva[6][6] = {
     // Attacker: Pawn, Knight, Bishop, Rook, Queen, King
     {105, 205, 305, 405, 505, 605}, // Victim: Pawn
     {104, 204, 304, 404, 504, 604}, // Victim: Knight
@@ -11,12 +13,18 @@ int _mvv_lva[6][6] = {
 };
 
 
+struct ScoredMove {
+    uint32_t move;
+    int score;
+};
+
+
 /*
  * Most Valuable Victim : Least Valuable Attacker - move ordering to get higher value moves.
  *
  * Example: pxQ should be chosen over qxP.
  */
-int mvv_lva(uint32_t m) {
+inline int mvv_lva(uint32_t m) {
     if (get_flags(m) & MoveFlags::CAPTURE) return _mvv_lva[get_captured(m)][get_piece(m)];
     return 0;
 }
@@ -54,7 +62,7 @@ uint32_t MovePicker::find_best_move_fixed_depth(Position *p, int depth) {
 
     std::vector<uint32_t> moves = generate_legal_moves(p);
 
-    for (uint32_t m: moves) {
+    for (auto m: moves) {
         p->move(m);
         int score = -(this->search(p, depth - 1, 0, -MATE_SCORE, MATE_SCORE));
         log << "Searching move: " << move_to_string(m) << "\tScore: " << score << std::endl;
@@ -96,8 +104,8 @@ uint32_t MovePicker::find_best_move(Position *p, int ms) {
         uint32_t iter_best_move = 0;
         int iter_best_score = INT_MIN;
 
-        for (uint32_t m: moves) {
-            // std::cout << "Checking move: " << move_to_string(m) << " at depth " << depth << std::endl;
+        for (auto m: moves) {
+
             if (time_up()) break;
 
             p->move(m);
@@ -151,30 +159,35 @@ int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
     int alpha_orig = alpha;
     int best_score = INT_MIN;
 
-    std::vector<uint32_t> capture_moves;
-    std::vector<uint32_t> non_capture_moves;
+    // Build a list of moves paired with a heuristic score for ordering
+    std::vector<ScoredMove> scored_list;
 
-    for (uint32_t m: moves) {
-        if (get_flags(m) & MoveFlags::CAPTURE) capture_moves.push_back(m);
-        else non_capture_moves.push_back(m);
+    for (auto m: moves) {
+        int score = 0;
+
+        // Prioritize captures using MVV-LVA
+        if (get_flags(m) & MoveFlags::CAPTURE)
+            score = mvv_lva(m);
+
+        scored_list.push_back({m, score});
     }
 
-    std::sort(capture_moves.begin(), capture_moves.end(),
-              [&](uint32_t x, uint32_t y) {return mvv_lva(x) > mvv_lva(y);});
+    // Sort moves so that higher-scoring (more promising) ones are searched first
+    std::sort(scored_list.begin(), scored_list.end(),
+            [](const ScoredMove& a, const ScoredMove& b) {
+                return a.score > b.score;
+            });
 
+    // Search moves in order with alpha-beta pruning
+    for (const auto& sm: scored_list) {
+        p->move(sm.move);
+        int score = -(this->search(p, depth - 1, ply + 1, -beta, -alpha));
+        p->unmove(sm.move);
 
-    for (std::vector<uint32_t> move_set: {capture_moves, non_capture_moves}) {
-        for (uint32_t m: move_set) {
-            p->move(m);
-            int score = -(this->search(p, depth - 1, ply + 1, -beta, -alpha));
-            p->unmove(m);
+        if (score > alpha) alpha = score;
+        if (score > best_score) best_score = score;
 
-            if (score > alpha) alpha = score;
-            
-            if (score > best_score) best_score = score;
-
-            if (alpha >= beta) break;
-        }
+        if (alpha >= beta) break;
     }
 
     // Store new entry in the transposition table

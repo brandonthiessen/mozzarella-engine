@@ -82,7 +82,10 @@ void uci_loop() {
             }
 
             int remaining = (pos.player_to_move == Player::WHITE) ? wtime : btime;
-            int time_budget = (movetime != -1) ? movetime : (remaining > 0 ? remaining / 50 : 1000);
+
+            int time_budget = (movetime != -1)
+                ? movetime
+                : std::max(100, remaining > 0 ? remaining / 50 : 100);
 
             uint32_t best_move;
 

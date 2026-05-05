@@ -1,9 +1,15 @@
 #include "../src/perft.h"
 
+#include <chrono>
+
 std::string STARTPOS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 int main(int argc, char* argv[]) {
+
     if (argc != 2) return -1;
+
+    auto start = std::chrono::steady_clock::now();
+
     std::cout << "Running standard perft\n";
     int DEPTH = std::stoi(argv[1]);
 
@@ -52,5 +58,12 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i <= 5; i++) {
         std::cout << "Depth: " << i << "\tNodes: " << perft(&p5, i) << "\t\tExpected: " << pos5_exp[i] << "\n";
     }
+
+
+    // Report the total time elapsed
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+    std::cout << "Done\n";
+    std::cout << "Time elapsed: " << elapsed << "ms\n";
 }
 

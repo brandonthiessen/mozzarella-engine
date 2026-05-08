@@ -4,6 +4,7 @@
 #include "search.h"
 #include "uci.h"
 #include <vector>
+#include <sstream>
 
 
 void uci_loop() {
@@ -20,18 +21,34 @@ void uci_loop() {
         else if (line == "isready") {
             std::cout << "readyok" << std::endl;
         }
-        else if (line == "position startpos") {
-            pos = Position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-        }
         else if (line.rfind("position", 0) == 0) {
-            size_t moves_idx = line.find("moves");
-            if (moves_idx != std::string::npos) {
-                std::string moves_str = line.substr(moves_idx + 6);
-                std::istringstream iss(moves_str);
+            std::istringstream iss(line);
+            std::string token;
+            iss >> token;  // read "position"
+            iss >> token;  // read "startpos" or "fen"
+
+            if (token == "startpos") {
+                pos = Position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+            }
+            else if (token == "fen") {
+                // Read the FEN string (6 space-separated parts)
+                std::string fen_str;
+                for (int i = 0; i < 6; i++) {
+                    if (iss >> token) {
+                        if (i > 0) fen_str += " ";
+                        fen_str += token;
+                    }
+                }
+                pos = Position(fen_str);
+            }
+
+            // Parse and apply moves if present
+            if (iss >> token && token == "moves") {
                 std::string move_str;
-                while (iss >> move_str);
-                uint32_t m = parse_move(pos, move_str);
-                pos.move(m);
+                while (iss >> move_str) {
+                    uint32_t m = parse_move(pos, move_str);
+                    pos.move(m);
+                }
             }
         }
         else if (line.rfind("go", 0) == 0) {

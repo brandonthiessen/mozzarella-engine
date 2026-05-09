@@ -18,6 +18,9 @@ void uci_loop() {
             std::cout << "id author Brandon Thiessen" << std::endl;
             std::cout << "uciok" << std::endl;
         }
+        else if (line == "ucinewgame") {
+            mp.tt.clear();
+        }
         else if (line == "isready") {
             std::cout << "readyok" << std::endl;
         }
@@ -112,9 +115,6 @@ void uci_loop() {
             } else {
                 best_move = mp.find_best_move(&pos, time_budget);
             }
-
-            // Make the move on the internal board
-            pos.move(best_move);
 
             // Output the move to CLI
             std::cout << "bestmove " << move_to_string(best_move) << std::endl;

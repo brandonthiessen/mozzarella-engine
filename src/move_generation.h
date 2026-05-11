@@ -24,24 +24,32 @@ extern uint64_t W_KS_CASTLE_MASK;
 extern uint64_t B_QS_CASTLE_MASK;
 extern uint64_t B_KS_CASTLE_MASK;
 
-std::vector<uint32_t> generate_legal_moves(Position *p);
+int generate_legal_moves(Position *p, uint32_t *moves, bool noisy_only);
 
-std::vector<uint32_t> generate_castle_moves(Position *p);
-std::vector<uint32_t> generate_en_passant_moves(Position *p);
+int generate_castle_moves(Position *p, uint32_t *moves, bool noisy_only);
+int generate_en_passant_moves(Position *p, uint32_t *moves, bool noisy_only);
 
-std::vector<uint32_t> generate_pawn_moves(Position *p);
-std::vector<uint32_t> generate_knight_moves(Position *p);
+int generate_pawn_moves(Position *p, uint32_t *moves, bool noisy_only);
+int generate_knight_moves(Position *p, uint32_t *moves, bool noisy_only);
 
-std::vector<uint32_t> generate_king_moves(Position *p);
+int generate_king_moves(Position *p, uint32_t *moves, bool noisy_only);
 
-std::vector<uint32_t> generate_bishop_moves(Position *p);
-std::vector<uint32_t> generate_rook_moves(Position *p);
-std::vector<uint32_t> generate_queen_moves(Position *p);
+int generate_bishop_moves(Position *p, uint32_t *moves, bool noisy_only);
+int generate_rook_moves(Position *p, uint32_t *moves, bool noisy_only);
+int generate_queen_moves(Position *p, uint32_t *moves, bool noisy_only);
 
-std::vector<uint32_t> generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas);
+int generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas, uint32_t *moves, bool noisy_only);
+
+bool move_gives_check(Position *p, uint32_t move);
+
+bool is_direct_attack(Position *p, Piece moved_piece, int to_sq, int king_sq);
+bool is_discovered_check(Position *p, int from_sq, int king_sq);
 
 bool is_in_check(Position *p, Player player);
 bool is_in_sliding_check(Position *p, Player player);
+
+bool is_in_check2(Position *p, Player player, uint32_t move);
+bool is_in_sliding_check2(Position *p, Player player, uint32_t move);
 
 void render_bitboard(uint64_t bb, int origin_sq, char symbol);
 

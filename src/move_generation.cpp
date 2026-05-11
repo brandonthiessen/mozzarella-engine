@@ -1,4 +1,9 @@
 #include "move_generation.h"
+#include "move.h"
+#include "piece.h"
+#include <cstdint>
+
+#include "log.h"
 
 uint64_t PAWN_ADVANCE_MASKS[2][64] = {
     {
@@ -70,56 +75,45 @@ uint64_t W_KS_CASTLE_MASK = 0x60;
 uint64_t B_QS_CASTLE_MASK = 0xE00000000000000;
 uint64_t B_KS_CASTLE_MASK = 0x6000000000000000;
 
-std::vector<uint32_t> generate_legal_moves(Position *p) {
-    // TODO: rework this to use an array pointer passed in to the function or something
-    // There is no reason that this needs to use a whole std::vector and return a copy
-    // of the vector every time it returns. 
+int generate_legal_moves(Position *p, uint32_t *moves, bool noisy_only) {
 
-    // Also, if you do rework this, you can use a C-style array and have each function
-    // return a pointer to the end of the array OR just an integer representing how many
-    // moves were added.
-
-    std::vector<uint32_t> legal_moves;
     Player player = p->player_to_move;
+    int n = 0;
 
-    std::vector<uint32_t> (*generators[])(Position*) = {
+    int (*generators[])(Position*, uint32_t*, bool) = {
         generate_pawn_moves,
         generate_en_passant_moves,
         generate_knight_moves,
         generate_bishop_moves,
         generate_rook_moves,
-        generate_queen_moves//,
-        //generate_king_moves,
-        //generate_castle_moves
+        generate_queen_moves,
+        generate_king_moves
     };
 
-    // There could be an optimization here considering that there can only be 2 checking
-    // pieces at any given time.
-
     for (auto gen : generators) {
-        for (uint32_t m : gen(p)) {
-            p->move(m);
-            if (!is_in_check(p, player)) legal_moves.push_back(m);
-            p->unmove(m);
-        }
+        n += gen(p, moves + n, noisy_only);
     }
 
+    // Cannot castle while you're in check
     if (!is_in_check(p, player)) {
-        for (uint32_t m : generate_castle_moves(p)) {
-            p->move(m);
-            if (!is_in_check(p, player)) legal_moves.push_back(m);
-            p->unmove(m);
+        n += generate_castle_moves(p, moves + n, noisy_only);
+    }
+
+    // Filter for legal moves
+    int j = 0;
+
+    for (int i = 0; i < n; i++) {
+        uint32_t m = moves[i];
+
+        p->move(m);
+        if (!is_in_check(p, player)) {
+            moves[j++] = m;
         }
     }
 
-    for (uint32_t m : generate_king_moves(p)) {
-        p->move(m);
-        if (!is_in_check(p, player)) legal_moves.push_back(m);
-        p->unmove(m);
-    }
-
-    return legal_moves;
+    return j;
 }
+
 
 std::vector<uint32_t> generate_castle_moves(Position *p) {
     uint64_t all_occupied = p->get_occupied(Player::WHITE) | p->get_occupied(Player::BLACK);
@@ -259,14 +253,14 @@ std::vector<uint32_t> generate_pawn_moves(Position *p) {
     return moves;
 }
 
-std::vector<uint32_t> generate_knight_moves(Position *p) {
+int generate_knight_moves(Position *p, uint32_t *moves, bool noisy_only) {
+    int n = 0;
+
     Player player = p->player_to_move;
     Player opponent = (Player) (1 - p->player_to_move);
 
     uint64_t occupied = p->get_occupied(player);
     uint64_t opponent_occupied = p->get_occupied(opponent);
-
-    std::vector<uint32_t> moves;
 
     uint64_t knight_bb = p->bitboards[player][Piece::KNIGHT];
 
@@ -284,37 +278,44 @@ std::vector<uint32_t> generate_knight_moves(Position *p) {
             if (opponent_occupied & to_bb) {
                 for (Piece attackable_piece: attackable_pieces) {
                     if (p->bitboards[opponent][attackable_piece] & to_bb) {
-                        moves.push_back(encode_move(knight_sq, to_sq, Piece::KNIGHT, attackable_piece, 0, MoveFlags::CAPTURE));
+                        uint32_t move = encode_move(knight_sq, to_sq, Piece::KNIGHT, attackable_piece, 0, MoveFlags::CAPTURE);
+                        moves[n++] = move;
                     }
                 }
             } else {
-                moves.push_back(encode_move(knight_sq, to_sq, Piece::KNIGHT, 0, 0, 0));
+                // TODO: check for noisiness
+                uint32_t move = encode_move(knight_sq, to_sq, Piece::KNIGHT, 0, 0, 0);
+                moves[n++] = move;
             }
         }
     }
 
-    return moves;
+    return n;
 }
 
-std::vector<uint32_t> generate_king_moves(Position *p) {
+int generate_king_moves(Position *p, uint32_t *moves, bool noisy_only) {
+    int n = 0;
 
     Player opponent = (Player) (1 - p->player_to_move);
     uint64_t king_bb = p->bitboards[p->player_to_move][Piece::KING];
 
     int king_sq = pop_lsb(king_bb);
 
+    // TODO: Why is this here?
     std::vector<int> to_sqs;
 
     uint64_t king_move_bb = KING_MOVE_MASKS[king_sq] & ~(p->get_occupied(p->player_to_move));
 
-    uint64_t non_captures = king_move_bb & ~(p->get_occupied(opponent));
     uint64_t captures = KING_MOVE_MASKS[king_sq] & p->get_occupied(opponent);
     
-    std::vector<uint32_t> moves;
+    if (!noisy_only) {
+        uint64_t non_captures = king_move_bb & ~(p->get_occupied(opponent));
 
-    while (non_captures) {
-        int to_sq = pop_lsb(non_captures);
-        moves.push_back(encode_move(king_sq, to_sq, Piece::KING, 0, 0, 0));
+        while (non_captures) {
+            int to_sq = pop_lsb(non_captures);
+            uint32_t move = encode_move(king_sq, to_sq, Piece::KING, 0, 0, 0);
+            moves[n++] = move;
+        }
     }
 
     Piece attackable_pieces[] = {Piece::PAWN, Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN};
@@ -324,41 +325,43 @@ std::vector<uint32_t> generate_king_moves(Position *p) {
 
         for (Piece attackable_piece: attackable_pieces) {
             if (to_bb & p->bitboards[opponent][attackable_piece]) {
-                moves.push_back(encode_move(king_sq, to_sq, Piece::KING, attackable_piece, 0, MoveFlags::CAPTURE));
+                uint32_t move = encode_move(king_sq, to_sq, Piece::KING, attackable_piece, 0, MoveFlags::CAPTURE);
+                moves[n++] = move;
             }
         } 
     }
 
-    return moves;
+    return n;
 }
 
-std::vector<uint32_t> generate_bishop_moves(Position *p) {
+int generate_bishop_moves(Position *p, uint32_t *moves, bool noisy_only) {
     int deltas[] = {-9, -7, 7, 9};
-    return generate_sliding_moves(p, Piece::BISHOP, deltas, 4);
+    return generate_sliding_moves(p, Piece::BISHOP, deltas, 4, moves, noisy_only);
 }
 
-std::vector<uint32_t> generate_rook_moves(Position *p) {
+int generate_rook_moves(Position *p, uint32_t *moves, bool noisy_only) {
     int deltas[] = {-8, -1, 1, 8};
-    return generate_sliding_moves(p, Piece::ROOK, deltas, 4);
+    return generate_sliding_moves(p, Piece::ROOK, deltas, 4, moves, noisy_only);
 }
 
-std::vector<uint32_t> generate_queen_moves(Position *p) {
+int generate_queen_moves(Position *p, uint32_t *moves, bool noisy_only) {
     int deltas[] = {-9, -8, -7, -1, 1, 7, 8, 9};
-    return generate_sliding_moves(p, Piece::QUEEN, deltas, 8);
+    return generate_sliding_moves(p, Piece::QUEEN, deltas, 8, moves, noisy_only);
 }
 
-std::vector<uint32_t> generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas) {
+int generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas, uint32_t *moves, bool noisy_only) {
     Player player = p->player_to_move;
     Player opponent = (Player) (1 - player);
 
     uint64_t occupied = p->get_occupied(player);
     uint64_t opponent_occupied = p->get_occupied(opponent);
 
-    std::vector<uint32_t> moves;
-
     Piece attackable_pieces[] = {Piece::PAWN, Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN};
     
     uint64_t piece_sqs = p->bitboards[player][piece];
+
+    // Number of moves generated
+    int n = 0;
 
     while (piece_sqs) {
         int piece_sq = pop_lsb(piece_sqs);
@@ -382,13 +385,27 @@ std::vector<uint32_t> generate_sliding_moves(Position *p, Piece piece, int delta
                 if (opponent_occupied & to_bb) {
                     for (Piece attackable_piece: attackable_pieces) {
                         if (p->bitboards[opponent][attackable_piece] & to_bb) {
+
+                            // Always store this move - it is a capture
+                            uint32_t move = encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE));
+                            moves[n++] = move;
+
                             moves.push_back(encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE));
                             break;
                         }
                     }
                     break;
                 } else {
-                    moves.push_back(encode_move(piece_sq, to_sq, piece, 0, 0, 0));
+                    // This move is not a capture
+                    uint32_t move = encode_move(piece_sq, to_sq, piece, 0, 0, 0);
+                    if (noisy_only) {
+                        // Check to see if it leads to a check
+                        if move_gives_check(p, move) {
+                            moves[n++] = m
+                        }
+                    } else {
+                        moves[n++] = move;
+                    }
                 }
 
                 last_file = to_file;
@@ -396,8 +413,163 @@ std::vector<uint32_t> generate_sliding_moves(Position *p, Piece piece, int delta
         }
     }
 
-    return moves;
+    return n;
 }
+
+
+// Checks to see if playing the move puts the opposing king in check.
+// Only assumes that move is pseudolegal.
+// Assumes that the move has not been played on position p.
+// NOTE: This function (and its helpers) *do not* take pawn promotions into consideration,
+// since they are only intended to be used for noisy move filtering. If a pawn is being
+// promoted, the move is already noisy! As such, the function is not 100% "correct".
+bool move_gives_check(Position *p, uint32_t move) {
+    
+    Player player = p->player_to_move;
+    Player opponent = (Player) (1 - player);
+
+    // Find the opposing king square
+    uint64_t king_bb = p->bitboards[opponent][Piece::KING];
+    int king_sq = pop_lsb(king_bb);
+
+    // Get the piece type
+    Piece moved_piece = get_piece(move);
+
+    // Get the destination square
+    int to_sq = get_to_sq(move);
+    int from_sq = get_from_sq(move);
+
+    // Check direct attack by moved piece
+    if (is_direct_attack(p, moved_piece, to_sq, king_sq)) {
+        return true;
+    }
+
+    // Check discovered attack
+    if (is_discovered_check(p, from_sq, king_sq)) {
+        return true;
+    }
+
+    return false;
+}
+
+
+bool is_direct_attack(Position *p, Piece moved_piece, int to_sq, int king_sq) {
+    
+    Player player = p->player_to_move;
+    uint64_t king_bb = 1ULL << king_sq;
+
+    switch (moved_piece) {
+        case Piece::PAWN:
+            return PAWN_ATTACK_MASKS[player][to_sq] & king_bb;
+        case Piece::KNIGHT:
+            return KNIGHT_MOVE_MASKS[to_sq] & king_bb;
+        default:
+            break;
+    }
+
+    uint64_t attack_mask = 0;
+
+    switch (moved_piece) {
+        case Piece::BISHOP:
+            attack_mask = BISHOP_MOVE_MASKS[to_sq];
+            break;
+        case Piece::ROOK:
+            attack_mask = ROOK_MOVE_MASKS[to_sq];
+            break;
+        case Piece::QUEEN:
+            attack_mask = BISHOP_MOVE_MASKS[to_sq] | ROOK_MOVE_MASKS[to_sq];
+            break;
+        default:
+            break;
+    }
+
+    if (!(attack_mask & king_bb)) {
+        return false;
+    }
+
+    int kr = king_sq / 8, kf = king_sq % 8;
+    int tr = to_sq / 8, tf = to_sq % 8;
+
+    int dr = kr - tr, df = kf - tf;
+
+    int sr = (dr == 0) ? 0 : (dr > 0 ? 1 : -1);
+    int sf = (df == 0) ? 0 : (df > 0 ? 1 : -1);
+
+    int step = sr * 8 + sf;
+
+    uint64_t occupied = (p->get_occupied(Player::WHITE) | p->get_occupied(Player::BLACK));
+    occupied &= ~king_bb;
+
+    for (int sq = to_sq + step; sq != king_sq; sq += step) {
+        if (occupied & 1ULL << sq) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+bool is_discovered_check(Position *p, int from_sq, int king_sq) {
+    
+    uint64_t from_bb = 1ULL << from_sq;
+    uint64_t king_bb = 1ULL << king_sq;
+    Player player = p->player_to_move;
+
+    // Isolate the direction
+    int kr = king_sq / 8, kf = king_sq % 8;
+    int fr = from_sq / 8, ff = from_sq % 8;
+
+    int dr = kr - fr, df = kf - ff;
+
+    // Check for geometrically impossible rays
+    if (!(dr == 0 || df == 0 || abs(dr) == abs(df))) {
+        return false;
+    }
+
+    // Normalize and invert the direction (we're going king square -> away from from_square)
+    int sr = (dr == 0) ? 0 : (dr > 0 ? -1 : 1);
+    int sf = (df == 0) ? 0 : (df > 0 ? -1 : 1);
+
+    int step = sr * 8 + sf;
+
+    uint64_t threats = p->bitboards[player][Piece::QUEEN];
+    if (abs(sr) == abs(sf)) {
+        threats |= p->bitboards[player][Piece::BISHOP];
+    } else {
+        threats |= p->bitboards[player][Piece::ROOK];
+    }
+    threats &= ~from_bb;
+
+    uint64_t non_threats = ((p->get_occupied(Player::WHITE) | p->get_occupied(Player::BLACK)) & ~king_bb) & ~threats;
+
+    for (int sq = king_sq + step; sq >= 0 && sq < 64; sq += step) {
+        // Prevent wrapping across file boundaries
+        int prev_file = (sq - step) % 8;
+        int curr_file = sq % 8;
+        
+        // If files are too far apart, we've wrapped
+        if (abs(curr_file - prev_file) > 1) {
+            return false;
+        }
+
+        uint64_t sq_bb = 1ULL << sq;
+
+        if (threats & sq_bb) {
+            return true;
+        }
+
+        if (non_threats & sq_bb) {
+            return false;
+        }
+    }
+
+    // Will this ever get reached?
+    // LOG("discovered check: reached final condition")
+    return false;
+
+}
+
 
 bool is_in_check(Position *p, Player player) {
     Player opponent = (Player) (1 - player);
@@ -416,6 +588,7 @@ bool is_in_check(Position *p, Player player) {
 
     return is_in_sliding_check(p, player);
 }
+
 
 bool is_in_sliding_check(Position* p, Player player) {
     // Locate the king square

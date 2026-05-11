@@ -24,7 +24,7 @@ class MovePicker {
         TranspositionTable tt;
 
         int search(Position *p, int depth, int ply, int alpha = -MATE_SCORE, int beta = MATE_SCORE);
-        int q_search(Position *p, int qply = 0, int alpha = INT_MIN, int beta = INT_MAX);
+        int q_search(Position *p, int ply, int qply = 0, int alpha = INT_MIN, int beta = INT_MAX);
 };
 
 

@@ -86,11 +86,14 @@ void uci_loop() {
             }
 
             if (perft_mode) {
-                std::vector<uint32_t> moves = generate_legal_moves(&pos);
+                std::array<uint32_t, 256> moves;
+                int n = generate_legal_moves(&pos, moves.data(), false);
 
                 long total_nodes = 0;
 
-                for (uint32_t m: moves) {
+                for (int i = 0; i < n; i++) {
+                    uint32_t m = moves[i];
+
                     pos.move(m);
                     long nodes = perft(&pos, perft_depth - 1);
                     total_nodes += nodes;

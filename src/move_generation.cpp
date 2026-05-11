@@ -278,13 +278,18 @@ int generate_knight_moves(Position *p, uint32_t *moves, bool noisy_only) {
             if (opponent_occupied & to_bb) {
                 for (Piece attackable_piece: attackable_pieces) {
                     if (p->bitboards[opponent][attackable_piece] & to_bb) {
+                        // Always store captures
                         uint32_t move = encode_move(knight_sq, to_sq, Piece::KNIGHT, attackable_piece, 0, MoveFlags::CAPTURE);
                         moves[n++] = move;
                     }
                 }
             } else {
-                // TODO: check for noisiness
                 uint32_t move = encode_move(knight_sq, to_sq, Piece::KNIGHT, 0, 0, 0);
+                if (noisy_only) {
+                    if (!(move_gives_check(p, move))) {
+                        continue;
+                    }
+                }
                 moves[n++] = move;
             }
         }
@@ -387,10 +392,8 @@ int generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas, 
                         if (p->bitboards[opponent][attackable_piece] & to_bb) {
 
                             // Always store this move - it is a capture
-                            uint32_t move = encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE));
+                            uint32_t move = encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE);
                             moves[n++] = move;
-
-                            moves.push_back(encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE));
                             break;
                         }
                     }
@@ -400,8 +403,8 @@ int generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas, 
                     uint32_t move = encode_move(piece_sq, to_sq, piece, 0, 0, 0);
                     if (noisy_only) {
                         // Check to see if it leads to a check
-                        if move_gives_check(p, move) {
-                            moves[n++] = m
+                        if (move_gives_check(p, move)) {
+                            moves[n++] = move;
                         }
                     } else {
                         moves[n++] = move;

@@ -68,9 +68,11 @@ uint32_t MovePicker::find_best_move_fixed_depth(Position *p, int depth) {
     int best_score = INT_MIN;
     uint32_t best_move;
 
-    std::vector<uint32_t> moves = generate_legal_moves(p);
+    std::array<uint32_t, 256> moves;
+    int n = generate_legal_moves(p, moves.data(), false);
 
-    for (auto m: moves) {
+    for (int i = 0; i < n; i++) {
+        uint32_t m = moves[i];
         p->move(m);
         int score = -(this->search(p, depth - 1, 0, -MATE_SCORE, MATE_SCORE));
         p->unmove(m);
@@ -108,7 +110,8 @@ uint32_t MovePicker::find_best_move(Position *p, int ms) {
     int best_score;
     uint32_t best_move;
 
-    std::vector<uint32_t> moves = generate_legal_moves(p);
+    std::array<uint32_t, 256> moves;
+    int n = generate_legal_moves(p, moves.data(), false);
 
     for (int depth = 1; ; depth++) {
 
@@ -118,7 +121,8 @@ uint32_t MovePicker::find_best_move(Position *p, int ms) {
         uint32_t iter_best_move = 0;
         int iter_best_score = INT_MIN;
 
-        for (auto m: moves) {
+        for (int i = 0; i < n; i++) {
+            uint32_t m = moves[i];
 
             if (time_up()) break;
 
@@ -168,12 +172,13 @@ int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
         return probe_score;
     }
 
-    std::vector<uint32_t> moves = generate_legal_moves(p);
+    std::array<uint32_t, 256> moves;
+    int n = generate_legal_moves(p, moves.data(), false);
 
-    if (depth == 0) return (p->player_to_move == Player::WHITE) ? evaluate(p) : -evaluate(p);
-        // return q_search(p, ply, 0, alpha, beta);
+    if (depth == 0) // return (p->player_to_move == Player::WHITE) ? evaluate(p) : -evaluate(p);
+        return q_search(p, ply, 0, alpha, beta);
 
-    if (moves.empty()) {
+    if (n == 0) {
         if (is_in_check(p, p->player_to_move)) return -MATE_SCORE + ply; // Checkmate
         else return 0; // Stalemate
     }
@@ -182,26 +187,29 @@ int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
     int best_score = INT_MIN;
 
     // Build a list of moves paired with a heuristic score for ordering
-    std::vector<ScoredMove> scored_list;
+    std::array<ScoredMove, 256> scored_list;
 
-    for (auto m: moves) {
+    for (int i = 0; i < n; i++) {
         int score = 0;
+
+        uint32_t m = moves[i];
 
         // Prioritize captures using MVV-LVA
         if (get_flags(m) & MoveFlags::CAPTURE)
             score = mvv_lva(m);
 
-        scored_list.push_back({m, score});
+        scored_list[i] = {m, score};
     }
 
     // Sort moves so that higher-scoring (more promising) ones are searched first
-    std::sort(scored_list.begin(), scored_list.end(),
+    std::sort(scored_list.begin(), scored_list.begin() + n,
             [](const ScoredMove& a, const ScoredMove& b) {
                 return a.score > b.score;
             });
 
     // Search moves in order with alpha-beta pruning
-    for (const auto& sm: scored_list) {
+    for (int i = 0; i < n; i++) {
+        const auto& sm = scored_list[i];
         p->move(sm.move);
         int score = -(this->search(p, depth - 1, ply + 1, -beta, -alpha));
         p->unmove(sm.move);
@@ -226,7 +234,7 @@ int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
  * A "quiet" position is one where there is no immediate tactical move,
  * such as a capture/check/promotion.
  */
-int MovePicker::q_search(Position *p, int qply, int alpha, int beta) {
+int MovePicker::q_search(Position *p, int ply, int qply, int alpha, int beta) {
     qnodes++;
     if (qply == 0) {
         LOG("QSEARCH ROOT enter alpha=" << alpha << " beta=" << beta);
@@ -239,23 +247,24 @@ int MovePicker::q_search(Position *p, int qply, int alpha, int beta) {
     if (best_score >= beta) return best_score;
     if (best_score > alpha) alpha = best_score;
 
-    uint32_t noisy_flags = MoveFlags::CAPTURE | MoveFlags::PROMO;
+    std::array<uint32_t, 256> noisy_moves;
+    int n = generate_legal_moves(p, noisy_moves.data(), true);
 
-    std::vector<uint32_t> noisy_moves;
-
-    std::vector<uint32_t> moves = generate_legal_moves(p);
-
-    for (uint32_t m: moves) {
-        if (get_flags(m) & noisy_flags) noisy_moves.push_back(m);
+    // Terminal node: no moves
+    if (n == 0) {
+        // If in check, it's checkmate
+        if (is_in_check(p, p->player_to_move)) return -MATE_SCORE + ply;
+        return 0; // Otherwise it's stalemate
     }
 
-    std::sort(noisy_moves.begin(), noisy_moves.end(),
+    std::sort(noisy_moves.begin(), noisy_moves.begin() + n,
               [&](uint32_t x, uint32_t y) {return mvv_lva(x) > mvv_lva(y);});
 
-    for (uint32_t m: noisy_moves) {
+    for (int i = 0; i < n; i++) {
+        uint32_t m = noisy_moves[i];
 
         p->move(m);
-        int score = -q_search(p, qply + 1, -beta, -alpha);
+        int score = -q_search(p, ply + 1, qply + 1, -beta, -alpha);
         p->unmove(m);
 
         if (qply == 0) {

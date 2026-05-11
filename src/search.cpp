@@ -2,6 +2,12 @@
 #include "move.h"
 #include <cstdint>
 
+#include "log.h" // DEBUG LOGGING
+
+uint64_t nodes = 0;
+uint64_t qnodes = 0;
+uint64_t tt_hits = 0;
+
 constexpr int _mvv_lva[6][6] = {
     // Attacker: Pawn, Knight, Bishop, Rook, Queen, King
     {105, 205, 305, 405, 505, 605}, // Victim: Pawn
@@ -55,7 +61,9 @@ MovePicker::~MovePicker() {
  */
 uint32_t MovePicker::find_best_move_fixed_depth(Position *p, int depth) {
 
-    std::ofstream log("log", std::ios::app);
+    nodes = 0;
+    qnodes = 0;
+    tt_hits = 0;
 
     int best_score = INT_MIN;
     uint32_t best_move;
@@ -65,7 +73,6 @@ uint32_t MovePicker::find_best_move_fixed_depth(Position *p, int depth) {
     for (auto m: moves) {
         p->move(m);
         int score = -(this->search(p, depth - 1, 0, -MATE_SCORE, MATE_SCORE));
-        log << "Searching move: " << move_to_string(m) << "\tScore: " << score << std::endl;
         p->unmove(m);
 
         if (score > best_score) {
@@ -74,7 +81,10 @@ uint32_t MovePicker::find_best_move_fixed_depth(Position *p, int depth) {
         }
     }
 
-    log << "Making move " << move_to_string(best_move) << " with score " << best_score << std::endl;
+    LOG("nodes=" << nodes);
+    LOG("qnodes=" << qnodes);
+    LOG("tt_hits=" << tt_hits);
+
     return best_move;
 }
 
@@ -88,6 +98,10 @@ uint32_t MovePicker::find_best_move_fixed_depth(Position *p, int depth) {
  * Internally relies on search() and q_search() in order to search the game space.
  */
 uint32_t MovePicker::find_best_move(Position *p, int ms) {
+
+    nodes = 0;
+    qnodes = 0;
+    tt_hits = 0;
 
     start_timer(ms);
 
@@ -129,6 +143,10 @@ uint32_t MovePicker::find_best_move(Position *p, int ms) {
         }
     }
 
+    LOG("nodes=" << nodes);
+    LOG("qnodes=" << qnodes);
+    LOG("tt_hits=" << tt_hits);
+
     (void) best_score;
 
     return best_move;
@@ -140,16 +158,20 @@ uint32_t MovePicker::find_best_move(Position *p, int ms) {
  * best move according to the evaluation function at the given depth.
  */
 int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
+    nodes++;
     
     // Probe the transposition table first
     uint64_t z = p->zobrist();
     int probe_score;
-    if (this->tt.probe(z, depth, &probe_score, alpha, beta)) return probe_score;
+    if (this->tt.probe(z, depth, &probe_score, alpha, beta)) {
+        tt_hits++;
+        return probe_score;
+    }
 
     std::vector<uint32_t> moves = generate_legal_moves(p);
 
-    if (depth == 0) // return (p->player_to_move == Player::WHITE) ? evaluate(p) : -evaluate(p);
-        return q_search(p, ply, alpha, beta);
+    if (depth == 0) return (p->player_to_move == Player::WHITE) ? evaluate(p) : -evaluate(p);
+        // return q_search(p, ply, 0, alpha, beta);
 
     if (moves.empty()) {
         if (is_in_check(p, p->player_to_move)) return -MATE_SCORE + ply; // Checkmate
@@ -204,7 +226,12 @@ int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
  * A "quiet" position is one where there is no immediate tactical move,
  * such as a capture/check/promotion.
  */
-int MovePicker::q_search(Position *p, int ply, int alpha, int beta) {
+int MovePicker::q_search(Position *p, int qply, int alpha, int beta) {
+    qnodes++;
+    if (qply == 0) {
+        LOG("QSEARCH ROOT enter alpha=" << alpha << " beta=" << beta);
+    }
+
     int static_eval_white = evaluate(p);
     
     int best_score = (p->player_to_move == Player::WHITE) ? static_eval_white : -static_eval_white;
@@ -226,9 +253,15 @@ int MovePicker::q_search(Position *p, int ply, int alpha, int beta) {
               [&](uint32_t x, uint32_t y) {return mvv_lva(x) > mvv_lva(y);});
 
     for (uint32_t m: noisy_moves) {
+
         p->move(m);
-        int score = -q_search(p, ply + 1, -beta, -alpha);
+        int score = -q_search(p, qply + 1, -beta, -alpha);
         p->unmove(m);
+
+        if (qply == 0) {
+            LOG("QSEARCH ROOT move=" << move_to_string(m)
+                << " score=" << score);
+        }
 
         if (score > beta) return score;
 

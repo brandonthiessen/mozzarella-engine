@@ -6,6 +6,8 @@
 #include <vector>
 #include <sstream>
 
+// DEBUG LOGGING
+#include "log.h"
 
 void uci_loop() {
     std::string line;
@@ -128,7 +130,12 @@ void uci_loop() {
 
 
 int main() {
+    debug_log.open("logs/debug.log", std::ios::trunc);
+    LOG("ENGINE START");
+
     std::ios::sync_with_stdio(false);
+
     uci_loop();
+
     return 0;
 }

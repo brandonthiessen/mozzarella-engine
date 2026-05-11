@@ -17,7 +17,7 @@ endif
 
 
 # Core objects
-CORE_OBJS = evaluation.o move_generation.o move.o perft.o piece.o position.o search.o timer.o tt.o uci.o utils.o
+CORE_OBJS = evaluation.o log.o move_generation.o move.o perft.o piece.o position.o search.o timer.o tt.o uci.o utils.o
 
 # Phony targets
 .PHONY: all debug release clean bench
@@ -42,7 +42,7 @@ bench: ../tests/movegen_bench ../tests/search_bench ../tests/perft
 
 
 # Object rule
-%.o: %.cpp castling_rights.h evaluation.h move_generation.h move.h perft.h piece.h player.h position.h search.h timer.h tt.h uci.h utils.h
+%.o: %.cpp castling_rights.h evaluation.h log.h move_generation.h move.h perft.h piece.h player.h position.h search.h timer.h tt.h uci.h utils.h
 	$(CXX) ${CXXFLAGS} -c $<
 
 

@@ -69,6 +69,12 @@ uint64_t KING_MOVE_MASKS[64] = {
     0x302030000000000, 0x705070000000000, 0xe0a0e0000000000, 0x1c141c0000000000, 0x3828380000000000, 0x7050700000000000, 0xe0a0e00000000000, 0xc040c00000000000,
     0x203000000000000, 0x507000000000000, 0xa0e000000000000, 0x141c000000000000, 0x2838000000000000, 0x5070000000000000, 0xa0e0000000000000, 0x40c0000000000000
 };
+uint64_t BISHOP_MOVE_MASKS[64] = {
+    0x8040201008040200, 0x80402010080500, 0x804020110a00, 0x8041221400, 0x182442800, 0x10204885000, 0x102040810a000, 0x102040810204000, 0x4020100804020002, 0x8040201008050005, 0x804020110a000a, 0x804122140014, 0x18244280028, 0x1020488500050, 0x102040810a000a0, 0x204081020400040, 0x2010080402000204, 0x4020100805000508, 0x804020110a000a11, 0x80412214001422, 0x1824428002844, 0x102048850005088, 0x2040810a000a010, 0x408102040004020, 0x1008040200020408, 0x2010080500050810, 0x4020110a000a1120, 0x8041221400142241, 0x182442800284482, 0x204885000508804, 0x40810a000a01008, 0x810204000402010, 0x804020002040810, 0x1008050005081020, 0x20110a000a112040, 0x4122140014224180, 0x8244280028448201, 0x488500050880402, 0x810a000a0100804, 0x1020400040201008, 0x402000204081020, 0x805000508102040, 0x110a000a11204080, 0x2214001422418000, 0x4428002844820100, 0x8850005088040201, 0x10a000a010080402, 0x2040004020100804, 0x200020408102040, 0x500050810204080, 0xa000a1120408000, 0x1400142241800000, 0x2800284482010000, 0x5000508804020100, 0xa000a01008040201, 0x4000402010080402, 0x2040810204080, 0x5081020408000, 0xa112040800000, 0x14224180000000, 0x28448201000000, 0x50880402010000, 0xa0100804020100, 0x40201008040201, 
+};
+uint64_t ROOK_MOVE_MASKS[64] = {
+    0x1010101010101fe, 0x2020202020202fd, 0x4040404040404fb, 0x8080808080808f7, 0x10101010101010ef, 0x20202020202020df, 0x40404040404040bf, 0x808080808080807f, 0x10101010101fe01, 0x20202020202fd02, 0x40404040404fb04, 0x80808080808f708, 0x101010101010ef10, 0x202020202020df20, 0x404040404040bf40, 0x8080808080807f80, 0x101010101fe0101, 0x202020202fd0202, 0x404040404fb0404, 0x808080808f70808, 0x1010101010ef1010, 0x2020202020df2020, 0x4040404040bf4040, 0x80808080807f8080, 0x1010101fe010101, 0x2020202fd020202, 0x4040404fb040404, 0x8080808f7080808, 0x10101010ef101010, 0x20202020df202020, 0x40404040bf404040, 0x808080807f808080, 0x10101fe01010101, 0x20202fd02020202, 0x40404fb04040404, 0x80808f708080808, 0x101010ef10101010, 0x202020df20202020, 0x404040bf40404040, 0x8080807f80808080, 0x101fe0101010101, 0x202fd0202020202, 0x404fb0404040404, 0x808f70808080808, 0x1010ef1010101010, 0x2020df2020202020, 0x4040bf4040404040, 0x80807f8080808080, 0x1fe010101010101, 0x2fd020202020202, 0x4fb040404040404, 0x8f7080808080808, 0x10ef101010101010, 0x20df202020202020, 0x40bf404040404040, 0x807f808080808080, 0xfe01010101010101, 0xfd02020202020202, 0xfb04040404040404, 0xf708080808080808, 0xef10101010101010, 0xdf20202020202020, 0xbf40404040404040, 0x7f80808080808080, 
+};
 
 uint64_t W_QS_CASTLE_MASK = 0xE;
 uint64_t W_KS_CASTLE_MASK = 0x60;
@@ -76,9 +82,9 @@ uint64_t B_QS_CASTLE_MASK = 0xE00000000000000;
 uint64_t B_KS_CASTLE_MASK = 0x6000000000000000;
 
 int generate_legal_moves(Position *p, uint32_t *moves, bool noisy_only) {
+    int n = 0;
 
     Player player = p->player_to_move;
-    int n = 0;
 
     int (*generators[])(Position*, uint32_t*, bool) = {
         generate_pawn_moves,
@@ -109,16 +115,17 @@ int generate_legal_moves(Position *p, uint32_t *moves, bool noisy_only) {
         if (!is_in_check(p, player)) {
             moves[j++] = m;
         }
+        p->unmove(m);
     }
 
     return j;
 }
 
 
-std::vector<uint32_t> generate_castle_moves(Position *p) {
+int generate_castle_moves(Position *p, uint32_t *moves, bool noisy_only) {
+    int n = 0;
+
     uint64_t all_occupied = p->get_occupied(Player::WHITE) | p->get_occupied(Player::BLACK);
-    
-    std::vector<uint32_t> moves;
     
     // TODO: merge these shifts since they are the same, just different directions
     if (p->castling_rights[p->player_to_move] & CastlingRights::KING_UNMOVED) {
@@ -130,9 +137,38 @@ std::vector<uint32_t> generate_castle_moves(Position *p) {
 
             if (!castle_through_check) {
                 if (p->player_to_move == Player::WHITE && !(W_QS_CASTLE_MASK & all_occupied)) {
-                        moves.push_back(encode_move(4, 2, Piece::KING, 0, 0, MoveFlags::QUEEN_CASTLE));
+                    uint32_t move = encode_move(4, 2, Piece::KING, 0, 0, MoveFlags::QUEEN_CASTLE);
+
+                    // Noisy-only filtering
+                    if (noisy_only) {
+                        // We need to use the regular check detection for castles
+                        p->move(move);
+                        if (is_in_check(p, Player::BLACK)) {
+                            moves[n++] = move;
+                        }
+                        p->unmove(move);
+                    }
+                    else {
+                        moves[n++] = move;
+
+                    }
                 } else if (p->player_to_move == Player::BLACK && !(B_QS_CASTLE_MASK & all_occupied)) {
-                        moves.push_back(encode_move(60, 58, Piece::KING, 0, 0, MoveFlags::QUEEN_CASTLE));
+                    uint32_t move = encode_move(60, 58, Piece::KING, 0, 0, MoveFlags::QUEEN_CASTLE);
+
+                    // Noisy-only filtering
+                    if (noisy_only) {
+                        // We need to use the regular check detection for castles
+                        p->move(move);
+                        if (is_in_check(p, Player::WHITE)) {
+                            moves[n++] = move;
+                        }
+                        p->unmove(move);
+                    }
+                    else {
+                        moves[n++] = move;
+
+                    }
+
                 }
             }
         }
@@ -145,19 +181,47 @@ std::vector<uint32_t> generate_castle_moves(Position *p) {
 
             if (!castle_through_check) {
                 if (p->player_to_move == Player::WHITE && !(W_KS_CASTLE_MASK & all_occupied)) {
-                    moves.push_back(encode_move(4, 6, Piece::KING, 0, 0, KING_CASTLE));
+                    uint32_t move = encode_move(4, 6, Piece::KING, 0, 0, KING_CASTLE);
+
+                    // Noisy-only filtering
+                    if (noisy_only) {
+                        // We need to use the regular check detection for castles
+                        p->move(move);
+                        if (is_in_check(p, Player::BLACK)) {
+                            moves[n++] = move;
+                        }
+                        p->unmove(move);
+                    }
+                    else {
+                        moves[n++] = move;
+                    }
+
                 } else if (p->player_to_move == Player::BLACK && !(B_KS_CASTLE_MASK & all_occupied)) {
-                    moves.push_back(encode_move(60, 62, Piece::KING, 0, 0, KING_CASTLE));
+                    uint32_t move = encode_move(60, 62, Piece::KING, 0, 0, KING_CASTLE);
+
+                    // Noisy-only filtering
+                    if (noisy_only) {
+                        // We need to use the regular check detection for castles
+                        p->move(move);
+                        if (is_in_check(p, Player::WHITE)) {
+                            moves[n++] = move;
+                        }
+                        p->unmove(move);
+                    }
+                    else {
+                        moves[n++] = move;
+                    }
                 }
             }
         }
     }
 
-    return moves;
+    return n;
 }
 
-std::vector<uint32_t> generate_en_passant_moves(Position *p) {
-    std::vector<uint32_t> moves;
+int generate_en_passant_moves(Position *p, uint32_t *moves, bool noisy_only) {
+    (void) noisy_only;
+    int n = 0;
 
     if (!(p->move_stack.empty()) && get_flags(p->move_stack.back()) == MoveFlags::DOUBLE_PAWN_PUSH) {
         uint64_t occupied = (p->get_occupied(Player::WHITE) | p->get_occupied(Player::BLACK));
@@ -166,21 +230,23 @@ std::vector<uint32_t> generate_en_passant_moves(Position *p) {
         int to_sq = push_to_sq + (1 - 2 * (p->player_to_move)) * 8;
         int double_push_file = push_to_sq % 8;
 
-        if (!(1ULL << to_sq & occupied)) {
+        if (!((1ULL << to_sq) & occupied)) {
             if (p->bitboards[p->player_to_move][Piece::PAWN] & (1ULL << (push_to_sq - 1)) && double_push_file != 0) {
-                moves.push_back(encode_move(push_to_sq - 1, to_sq, Piece::PAWN, Piece::PAWN, 0, MoveFlags::EN_PASSANT | MoveFlags::CAPTURE));
+                moves[n++] = encode_move(push_to_sq - 1, to_sq, Piece::PAWN, Piece::PAWN, 0, MoveFlags::EN_PASSANT | MoveFlags::CAPTURE);
             }
 
             if (p->bitboards[p->player_to_move][Piece::PAWN] & (1ULL << (push_to_sq + 1)) && double_push_file != 7) {
-                moves.push_back(encode_move(push_to_sq + 1, to_sq, Piece::PAWN, Piece::PAWN, 0, MoveFlags::EN_PASSANT | MoveFlags::CAPTURE));
+                moves[n++] = encode_move(push_to_sq + 1, to_sq, Piece::PAWN, Piece::PAWN, 0, MoveFlags::EN_PASSANT | MoveFlags::CAPTURE);
             }
         }
     }
 
-    return moves;
+    return n;
 }
 
-std::vector<uint32_t> generate_pawn_moves(Position *p) {
+int generate_pawn_moves(Position *p, uint32_t *moves, bool noisy_only) {
+    int n = 0;
+
     Player player = p->player_to_move;
     Player opponent = Player (1 - player);
 
@@ -188,8 +254,6 @@ std::vector<uint32_t> generate_pawn_moves(Position *p) {
     uint64_t opponent_occupied = p->get_occupied(opponent);
     uint64_t all_occupied = occupied | opponent_occupied;
     uint64_t pawn_bb = p->bitboards[p->player_to_move][Piece::PAWN];
-
-    std::vector<uint32_t> moves;
 
     while (pawn_bb) {
         int pawn_sq = pop_lsb(pawn_bb);
@@ -217,16 +281,23 @@ std::vector<uint32_t> generate_pawn_moves(Position *p) {
 
             // If the target square is a promotion
             if ((56 * (opponent)) <= to_sq && to_sq <= (7 + 56 * (opponent))) {
-                moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::QUEEN, MoveFlags::QUEEN_PROMO));
-                moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::ROOK, MoveFlags::ROOK_PROMO));
-                moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::BISHOP, MoveFlags::BISHOP_PROMO));
-                moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::KNIGHT, MoveFlags::KNIGHT_PROMO));
+                moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::QUEEN, MoveFlags::QUEEN_PROMO);
+                moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::ROOK, MoveFlags::ROOK_PROMO);
+                moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::BISHOP, MoveFlags::BISHOP_PROMO);
+                moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, 0, Piece::KNIGHT, MoveFlags::KNIGHT_PROMO);
                 break;
             }
             if (std::abs(pawn_sq - to_sq) == 16) {
                 flags = DOUBLE_PAWN_PUSH;
             }
-            moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, 0, 0, flags));
+            if (noisy_only) {
+                uint32_t move = encode_move(pawn_sq, to_sq, Piece::PAWN, 0, 0, flags);
+                if (move_gives_check(p, move)) {
+                    moves[n++] = move;
+                }
+            } else {
+                moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, 0, 0, flags);
+            }
         }
 
         uint64_t all_pawn_attacks = PAWN_ATTACK_MASKS[player][pawn_sq] & opponent_occupied;
@@ -238,19 +309,19 @@ std::vector<uint32_t> generate_pawn_moves(Position *p) {
             for (Piece attackable_piece: attackable_pieces) {
                 if (p->bitboards[opponent][attackable_piece] & (1ULL << to_sq)) {
                     if ((56 * opponent) <= to_sq && to_sq <= (7 + 56 * opponent)) {
-                        moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::QUEEN, MoveFlags::QUEEN_PROMO | MoveFlags::CAPTURE));
-                        moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::ROOK, MoveFlags::ROOK_PROMO | MoveFlags::CAPTURE));
-                        moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::BISHOP, MoveFlags::BISHOP_PROMO | MoveFlags::CAPTURE));
-                        moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::KNIGHT, MoveFlags::KNIGHT_PROMO | MoveFlags::CAPTURE));
+                        moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::QUEEN, MoveFlags::QUEEN_PROMO | MoveFlags::CAPTURE);
+                        moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::ROOK, MoveFlags::ROOK_PROMO | MoveFlags::CAPTURE);
+                        moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::BISHOP, MoveFlags::BISHOP_PROMO | MoveFlags::CAPTURE);
+                        moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, Piece::KNIGHT, MoveFlags::KNIGHT_PROMO | MoveFlags::CAPTURE);
                         break;
                     }
-                    moves.push_back(encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, 0, MoveFlags::CAPTURE));
+                    moves[n++] = encode_move(pawn_sq, to_sq, Piece::PAWN, attackable_piece, 0, MoveFlags::CAPTURE);
                 }
             }
         }
     }
 
-    return moves;
+    return n;
 }
 
 int generate_knight_moves(Position *p, uint32_t *moves, bool noisy_only) {
@@ -306,9 +377,6 @@ int generate_king_moves(Position *p, uint32_t *moves, bool noisy_only) {
 
     int king_sq = pop_lsb(king_bb);
 
-    // TODO: Why is this here?
-    std::vector<int> to_sqs;
-
     uint64_t king_move_bb = KING_MOVE_MASKS[king_sq] & ~(p->get_occupied(p->player_to_move));
 
     uint64_t captures = KING_MOVE_MASKS[king_sq] & p->get_occupied(opponent);
@@ -321,6 +389,16 @@ int generate_king_moves(Position *p, uint32_t *moves, bool noisy_only) {
             uint32_t move = encode_move(king_sq, to_sq, Piece::KING, 0, 0, 0);
             moves[n++] = move;
         }
+    } else {
+        // Noisy only king move generation - only need to check to see if a move gives discovered check
+        uint64_t non_captures = king_move_bb & ~(p->get_occupied(opponent));
+        while (non_captures) {
+            int to_sq = pop_lsb(non_captures);
+            uint32_t move = encode_move(king_sq, to_sq, Piece::KING, 0, 0, 0);
+            if (move_gives_check(p, move)) {
+                moves[n++] = move;
+            }
+        }
     }
 
     Piece attackable_pieces[] = {Piece::PAWN, Piece::KNIGHT, Piece::BISHOP, Piece::ROOK, Piece::QUEEN};
@@ -330,8 +408,7 @@ int generate_king_moves(Position *p, uint32_t *moves, bool noisy_only) {
 
         for (Piece attackable_piece: attackable_pieces) {
             if (to_bb & p->bitboards[opponent][attackable_piece]) {
-                uint32_t move = encode_move(king_sq, to_sq, Piece::KING, attackable_piece, 0, MoveFlags::CAPTURE);
-                moves[n++] = move;
+                moves[n++] = encode_move(king_sq, to_sq, Piece::KING, attackable_piece, 0, MoveFlags::CAPTURE);
             }
         } 
     }
@@ -390,10 +467,8 @@ int generate_sliding_moves(Position *p, Piece piece, int deltas[], int ndeltas, 
                 if (opponent_occupied & to_bb) {
                     for (Piece attackable_piece: attackable_pieces) {
                         if (p->bitboards[opponent][attackable_piece] & to_bb) {
-
                             // Always store this move - it is a capture
-                            uint32_t move = encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE);
-                            moves[n++] = move;
+                            moves[n++] = encode_move(piece_sq, to_sq, piece, attackable_piece, 0, MoveFlags::CAPTURE);
                             break;
                         }
                     }

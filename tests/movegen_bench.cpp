@@ -5,28 +5,29 @@
 
 
 int main() {
-    int n = 200;
-    int m = 10000;
+    int num_walks = 200;
+    int num_iterations = 10000;
 
-    std::cout << "Generating " << m << " sets of " << n << " random walks\n";
+    std::cout << "Generating " << num_iterations << " sets of " << num_walks << " random walks\n";
 
     std::string STARTPOS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     auto start = std::chrono::steady_clock::now();
 
-    for (int i = 0; i < m; i++) {
+    for (int i = 0; i < num_iterations; i++) {
 
         int seed = 789617 + i;
         std::mt19937 rng(seed);
 
         Position p = Position(STARTPOS);
 
-        for (int j = 0; j < n; j++) {
+        for (int j = 0; j < num_walks; j++) {
 
-            auto moves = generate_legal_moves(&p);
+            std::array<uint32_t, 256> moves;
+            int n = generate_legal_moves(&p, moves.data(), false);
             if (moves.empty()) break;
 
-            std::uniform_int_distribution<uint64_t> dist(0, moves.size() - 1);
+            std::uniform_int_distribution<uint64_t> dist(0, n - 1);
             uint32_t move = moves[dist(rng)];
 
             p.move(move);

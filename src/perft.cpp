@@ -4,7 +4,7 @@ uint64_t perft(Position *p, int depth) {
     if (depth == 0) return 1;
     std::array<uint32_t, 256> moves;
     int n = generate_legal_moves(p, moves.data(), false);
-    if (depth == 1) return moves.size();
+    if (depth == 1) return n;
 
     long total = 0;
     for (int i = 0; i < n; i++) {

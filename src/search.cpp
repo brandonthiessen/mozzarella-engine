@@ -175,8 +175,10 @@ int MovePicker::search(Position *p, int depth, int ply, int alpha, int beta) {
     std::array<uint32_t, 256> moves;
     int n = generate_legal_moves(p, moves.data(), false);
 
-    if (depth == 0) // return (p->player_to_move == Player::WHITE) ? evaluate(p) : -evaluate(p);
+    if (depth == 0) {
+        // return (p->player_to_move == Player::WHITE) ? evaluate(p) : -evaluate(p);
         return q_search(p, ply, 0, alpha, beta);
+    }
 
     if (n == 0) {
         if (is_in_check(p, p->player_to_move)) return -MATE_SCORE + ply; // Checkmate

@@ -241,6 +241,9 @@ int MovePicker::q_search(Position *p, int ply, int qply, int alpha, int beta) {
     }
 
     int static_eval_white = evaluate(p);
+
+    // Upper limit to how far q-search can check
+    if (qply >= 4) return static_eval_white;
     
     int best_score = (p->player_to_move == Player::WHITE) ? static_eval_white : -static_eval_white;
 

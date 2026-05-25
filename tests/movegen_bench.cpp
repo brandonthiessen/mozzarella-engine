@@ -25,7 +25,7 @@ int main() {
 
             std::array<uint32_t, 256> moves;
             int n = generate_legal_moves(&p, moves.data(), false);
-            if (moves.empty()) break;
+            if (n == 0) break;
 
             std::uniform_int_distribution<uint64_t> dist(0, n - 1);
             uint32_t move = moves[dist(rng)];

@@ -27,8 +27,8 @@ Mozzarella is a learning-focused engine designed to explore classical search tec
 
 To build Mozzarella, you need the following tools installed on your system:
 
-- **g++** (C++17-compatible)
-- **Make** (version 4.0 or higher)
+- **g++** (C++20-compatible)
+- **Make** (version 3.8 or higher)
 
 ### Instructions
 

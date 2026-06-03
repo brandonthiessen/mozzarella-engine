@@ -14,15 +14,19 @@ uint32_t parse_move(Position pos, std::string move_str) {
             case 'q': 
                 promo_piece = Piece::QUEEN;
                 flags |= (MoveFlags::QUEEN_PROMO);
+                break;
             case 'n': 
                 promo_piece = Piece::KNIGHT;
                 flags |= (MoveFlags::KNIGHT_PROMO);
+                break;
             case 'b': 
                 promo_piece = Piece::BISHOP;
                 flags |= (MoveFlags::BISHOP_PROMO);
+                break;
             case 'r': 
                 promo_piece = Piece::ROOK;
                 flags |= (MoveFlags::ROOK_PROMO);
+                break;
         }
     }
 

@@ -1,7 +1,7 @@
 CXX = g++
 
 # Common flags
-CXXFLAGS_COMMON = -Wall -Wextra -Werror
+CXXFLAGS_COMMON = -std=c++20 -Wall -Wextra -Werror
 
 # Build configurations
 CXXFLAGS_DEBUG = -g -O0
